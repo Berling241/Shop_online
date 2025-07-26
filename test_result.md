@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test complet du backend API pour Darling Boutique e-commerce avec les fonctionnalités Products, Cart, Orders et Categories APIs"
+user_problem_statement: "Test complet de l'interface utilisateur frontend pour Darling Boutique e-commerce avec navigation, catalogue produits, panier et processus de commande"
 
 backend:
   - task: "Products API - GET all products with filters"
