@@ -281,9 +281,15 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Product catalog display and filtering"
+    - "Search functionality"
+    - "Shopping cart operations"
+    - "Order flow with mobile payment"
+    - "UI responsiveness and design"
+    - "Navigation and header functionality"
   stuck_tasks: []
-  test_all: false
+  test_all: true
   test_priority: "high_first"
 
 agent_communication:
