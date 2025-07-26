@@ -249,15 +249,18 @@ frontend:
 
   - task: "Order flow with mobile payment"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/frontend/src/components/OrderModal.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "Order flow implemented with Moov Money and Airtel Money integration. Need to test complete checkout process and payment validation."
+        - working: true
+          agent: "testing"
+          comment: "✅ Order flow with mobile payment working perfectly. Both Moov Money and Airtel Money payment methods functional. Payment method selection works correctly. Phone number input accepts valid numbers (01/02/05 for Moov, 07/09 for Airtel). Order creation successful with proper backend integration. Order confirmation displays with order number. Cart clears after successful order. Payment validation working as expected."
 
   - task: "UI responsiveness and design"
     implemented: true
