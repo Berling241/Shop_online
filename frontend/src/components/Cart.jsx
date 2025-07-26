@@ -3,51 +3,79 @@ import { X, Plus, Minus, Trash2, CreditCard } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { cartStorage, paymentMethods } from '../data/mockData';
+import { cartAPI, ordersAPI, formatPrice, paymentMethods } from '../services/api';
 import { useToast } from '../hooks/use-toast';
 
 const Cart = ({ isOpen, onClose }) => {
-  const [cartItems, setCartItems] = useState([]);
+  const [cart, setCart] = useState({ items: [], total: 0 });
   const [selectedPayment, setSelectedPayment] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (isOpen) {
-      setCartItems(cartStorage.getCart());
+  const loadCart = async () => {
+    if (!isOpen) return;
+    
+    setIsLoading(true);
+    try {
+      const cartData = await cartAPI.get();
+      setCart(cartData);
+    } catch (error) {
+      console.error('Error loading cart:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger le panier",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }, [isOpen]);
-
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
   };
 
-  const updateQuantity = (productId, newQuantity) => {
+  useEffect(() => {
+    loadCart();
+  }, [isOpen]);
+
+  const updateQuantity = async (productId, newQuantity) => {
     if (newQuantity <= 0) {
       removeItem(productId);
       return;
     }
     
-    const updatedCart = cartStorage.updateQuantity(productId, newQuantity);
-    setCartItems(updatedCart);
-    window.dispatchEvent(new CustomEvent('cartUpdated'));
+    try {
+      const result = await cartAPI.updateItem(productId, newQuantity);
+      setCart(result.cart);
+      window.dispatchEvent(new CustomEvent('cartUpdated'));
+    } catch (error) {
+      console.error('Error updating quantity:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour la quantité",
+        variant: "destructive",
+      });
+    }
   };
 
-  const removeItem = (productId) => {
-    const updatedCart = cartStorage.removeFromCart(productId);
-    setCartItems(updatedCart);
-    window.dispatchEvent(new CustomEvent('cartUpdated'));
-    
-    toast({
-      title: "Produit retiré",
-      description: "Le produit a été retiré de votre panier",
-      duration: 2000,
-    });
-  };
-
-  const calculateTotal = () => {
-    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+  const removeItem = async (productId) => {
+    try {
+      const result = await cartAPI.removeItem(productId);
+      setCart(result.cart);
+      window.dispatchEvent(new CustomEvent('cartUpdated'));
+      
+      toast({
+        title: "Produit retiré",
+        description: "Le produit a été retiré de votre panier",
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error removing item:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de retirer le produit",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCheckout = async () => {
@@ -69,26 +97,62 @@ const Cart = ({ isOpen, onClose }) => {
       return;
     }
 
+    if (cart.items.length === 0) {
+      toast({
+        title: "Erreur",
+        description: "Votre panier est vide",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
 
-    // Simulation du processus de paiement
-    setTimeout(() => {
-      const orderNumber = Math.random().toString(36).substr(2, 9).toUpperCase();
-      
+    try {
+      // Préparer les données de commande
+      const orderItems = cart.items.map(item => ({
+        product_id: item.product_id,
+        product_name: item.product_name,
+        product_price: item.product_price,
+        product_image: item.product_image,
+        quantity: item.quantity,
+        subtotal: item.subtotal
+      }));
+
+      // Créer la commande
+      const order = await ordersAPI.create({
+        items: orderItems,
+        payment_method: selectedPayment,
+        phone_number: phoneNumber
+      });
+
       toast({
         title: "Commande confirmée !",
-        description: `Commande #${orderNumber} - Total: ${formatPrice(calculateTotal())}`,
+        description: `Commande #${order.order_number} - Total: ${formatPrice(order.total)}`,
         duration: 5000,
       });
       
-      // Vider le panier
-      cartStorage.clearCart();
-      setCartItems([]);
+      // Recharger le panier (maintenant vide)
+      await loadCart();
       window.dispatchEvent(new CustomEvent('cartUpdated'));
       
-      setIsProcessing(false);
+      setSelectedPayment('');
+      setPhoneNumber('');
       onClose();
-    }, 3000);
+      
+    } catch (error) {
+      console.error('Error creating order:', error);
+      const errorMessage = error.response?.data?.detail || "Une erreur est survenue lors de la commande";
+      
+      toast({
+        title: "Échec de la commande",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -107,7 +171,13 @@ const Cart = ({ isOpen, onClose }) => {
             </Button>
           </div>
 
-          {cartItems.length === 0 ? (
+          {isLoading ? (
+            // Loading state
+            <div className="text-center py-12">
+              <div className="w-8 h-8 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-500">Chargement...</p>
+            </div>
+          ) : cart.items.length === 0 ? (
             // Panier vide
             <div className="text-center py-12">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
@@ -126,20 +196,20 @@ const Cart = ({ isOpen, onClose }) => {
             <div className="space-y-6">
               {/* Articles du panier */}
               <div className="space-y-4">
-                {cartItems.map((item) => (
-                  <Card key={item.id} className="overflow-hidden">
+                {cart.items.map((item) => (
+                  <Card key={item.product_id} className="overflow-hidden">
                     <CardContent className="p-4">
                       <div className="flex space-x-4">
                         <img
-                          src={item.image}
-                          alt={item.name}
+                          src={item.product_image}
+                          alt={item.product_name}
                           className="w-16 h-16 object-cover rounded-lg"
                         />
                         
                         <div className="flex-1">
-                          <h4 className="font-semibold text-sm mb-1">{item.name}</h4>
+                          <h4 className="font-semibold text-sm mb-1">{item.product_name}</h4>
                           <p className="text-sm text-gray-600 mb-2">
-                            {formatPrice(item.price)}
+                            {formatPrice(item.product_price)}
                           </p>
                           
                           <div className="flex items-center justify-between">
@@ -149,7 +219,7 @@ const Cart = ({ isOpen, onClose }) => {
                                 variant="outline"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
                               >
                                 <Minus className="h-3 w-3" />
                               </Button>
@@ -162,7 +232,7 @@ const Cart = ({ isOpen, onClose }) => {
                                 variant="outline"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
                               >
                                 <Plus className="h-3 w-3" />
                               </Button>
@@ -173,7 +243,7 @@ const Cart = ({ isOpen, onClose }) => {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-red-500 hover:text-red-700"
-                              onClick={() => removeItem(item.id)}
+                              onClick={() => removeItem(item.product_id)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -191,7 +261,7 @@ const Cart = ({ isOpen, onClose }) => {
                   <div className="flex justify-between items-center text-lg font-bold">
                     <span>Total</span>
                     <span className="text-pink-600">
-                      {formatPrice(calculateTotal())}
+                      {formatPrice(cart.total)}
                     </span>
                   </div>
                 </CardContent>
@@ -250,7 +320,7 @@ const Cart = ({ isOpen, onClose }) => {
                     ) : (
                       <>
                         <CreditCard className="h-4 w-4 mr-2" />
-                        Commander ({formatPrice(calculateTotal())})
+                        Commander ({formatPrice(cart.total)})
                       </>
                     )}
                   </Button>

@@ -4,55 +4,62 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Header from "./components/Header";
 import ProductCard from "./components/ProductCard";
 import Cart from "./components/Cart";
-import { mockProducts, categories } from "./data/mockData";
+import { productsAPI, categoriesAPI } from "./services/api";
 import { Toaster } from "./components/ui/sonner";
 import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
-import { Filter, SortAsc } from "lucide-react";
+import { Filter } from "lucide-react";
 
 const Home = () => {
-  const [products, setProducts] = useState(mockProducts);
-  const [filteredProducts, setFilteredProducts] = useState(mockProducts);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [sortBy, setSortBy] = useState('name');
   const [showFilters, setShowFilters] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Filtrage et recherche
+  // Charger les catégories
   useEffect(() => {
-    let filtered = [...products];
-
-    // Filtrage par catégorie
-    if (selectedCategory) {
-      filtered = filtered.filter(product => product.category === selectedCategory);
-    }
-
-    // Recherche
-    if (searchQuery) {
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Tri
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'price-asc':
-          return a.price - b.price;
-        case 'price-desc':
-          return b.price - a.price;
-        case 'rating':
-          return b.rating - a.rating;
-        case 'name':
-        default:
-          return a.name.localeCompare(b.name);
+    const loadCategories = async () => {
+      try {
+        const categoriesData = await categoriesAPI.getAll();
+        setCategories(categoriesData);
+      } catch (error) {
+        console.error('Error loading categories:', error);
       }
-    });
+    };
+    
+    loadCategories();
+  }, []);
 
-    setFilteredProducts(filtered);
-  }, [products, selectedCategory, searchQuery, sortBy]);
+  // Charger les produits avec filtres
+  useEffect(() => {
+    const loadProducts = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const filters = {
+          category: selectedCategory,
+          search: searchQuery,
+          sort_by: sortBy
+        };
+        
+        const productsData = await productsAPI.getAll(filters);
+        setProducts(productsData);
+      } catch (error) {
+        console.error('Error loading products:', error);
+        setError('Impossible de charger les produits');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, [selectedCategory, searchQuery, sortBy]);
 
   const handleCategorySelect = (category) => {
     setSelectedCategory(category);
@@ -104,7 +111,7 @@ const Home = () => {
               {getCategoryName(selectedCategory)}
             </h2>
             <Badge variant="secondary">
-              {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''}
+              {products.length} produit{products.length > 1 ? 's' : ''}
             </Badge>
           </div>
 
@@ -163,7 +170,33 @@ const Home = () => {
 
       {/* Products Grid */}
       <section className="container mx-auto px-4 pb-12">
-        {filteredProducts.length === 0 ? (
+        {isLoading ? (
+          // Loading state
+          <div className="text-center py-12">
+            <div className="w-12 h-12 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin mx-auto mb-4"></div>
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+              Chargement des produits...
+            </h3>
+          </div>
+        ) : error ? (
+          // Error state
+          <div className="text-center py-12">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+              Erreur de chargement
+            </h3>
+            <p className="text-gray-500 mb-4">{error}</p>
+            <Button
+              onClick={() => window.location.reload()}
+              variant="outline"
+            >
+              Réessayer
+            </Button>
+          </div>
+        ) : products.length === 0 ? (
+          // No products found
           <div className="text-center py-12">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
               <span className="text-2xl">🔍</span>
@@ -185,8 +218,9 @@ const Home = () => {
             </Button>
           </div>
         ) : (
+          // Products grid
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.map((product) => (
+            {products.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>

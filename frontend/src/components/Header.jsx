@@ -2,32 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { Search, ShoppingCart, Heart, Menu, User } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { cartStorage } from '../data/mockData';
+import { cartAPI } from '../services/api';
 
 const Header = ({ onCategorySelect, onSearchChange, onCartClick }) => {
   const [cartCount, setCartCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  useEffect(() => {
-    const updateCartCount = () => {
-      const cart = cartStorage.getCart();
-      const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const updateCartCount = async () => {
+    try {
+      const cart = await cartAPI.get();
+      const totalItems = cart.items.reduce((sum, item) => sum + item.quantity, 0);
       setCartCount(totalItems);
-    };
+    } catch (error) {
+      console.error('Error fetching cart:', error);
+      setCartCount(0);
+    }
+  };
 
+  useEffect(() => {
     updateCartCount();
     
     // Écouter les changements du panier
-    const handleStorageChange = () => updateCartCount();
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Custom event pour les mises à jour internes
-    window.addEventListener('cartUpdated', handleStorageChange);
+    const handleCartUpdate = () => updateCartCount();
+    window.addEventListener('cartUpdated', handleCartUpdate);
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('cartUpdated', handleStorageChange);
+      window.removeEventListener('cartUpdated', handleCartUpdate);
     };
   }, []);
 

@@ -3,7 +3,7 @@ import { Heart, ShoppingCart, Star } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardFooter } from './ui/card';
-import { cartStorage } from '../data/mockData';
+import { cartAPI, formatPrice } from '../services/api';
 import { useToast } from '../hooks/use-toast';
 
 const ProductCard = ({ product }) => {
@@ -11,16 +11,11 @@ const ProductCard = ({ product }) => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
-  };
-
   const handleAddToCart = async () => {
     setIsLoading(true);
     
-    // Simulation d'un délai d'ajout
-    setTimeout(() => {
-      cartStorage.addToCart(product);
+    try {
+      await cartAPI.addItem(product.id, 1);
       
       // Dispatch custom event pour mettre à jour le compteur
       window.dispatchEvent(new CustomEvent('cartUpdated'));
@@ -31,8 +26,17 @@ const ProductCard = ({ product }) => {
         duration: 2000,
       });
       
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'ajouter le produit au panier",
+        variant: "destructive",
+        duration: 3000,
+      });
+    } finally {
       setIsLoading(false);
-    }, 300);
+    }
   };
 
   const getCategoryColor = (category) => {
